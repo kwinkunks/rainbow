@@ -12,11 +12,12 @@ from flask import make_response
 from flask import request, jsonify, render_template
 
 from PIL import Image
+from sklearn.cluster import KMeans
+from sklearn.utils import shuffle
 
 from errors import InvalidUsage
 
 application = Flask(__name__)
-
 
 @application.errorhandler(InvalidUsage)
 def handle_invalid_usage(error):
@@ -24,14 +25,20 @@ def handle_invalid_usage(error):
     response.status_code = error.status_code
     return response
 
-
 #
-# Seismic frequency and SEGY bot
+# Rainbow.
 #
 @application.route('/rainbow')
 def rainbow():
     # Params from inputs.
     url = request.args.get('url')
+
+    # Get image.
+    requests_something = True
+    
+    # Unweave the rainbow.
+    result = image_to_data(img)
+
     pass
 
 
@@ -41,4 +48,4 @@ def main():
 
 if __name__ == "__main__":
     application.debug = True
-    application.run(host="0.0.0.0", port="80")
+    application.run()
