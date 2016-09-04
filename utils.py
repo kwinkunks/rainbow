@@ -6,15 +6,18 @@ by Matt Hall, Agile Geoscience, 2016
 """
 from io import BytesIO, StringIO
 import base64
+import datetime
 
 import numpy as np
 from PIL import Image
 from PIL import ImageStat
 from sklearn.cluster import KMeans
 from sklearn.utils import shuffle
+from sklearn.neighbors import BallTree
 from scipy.spatial.distance import pdist, squareform
 from scipy.spatial import cKDTree
 from pytsp import run, dumps_matrix
+import boto3
 
 from flask import send_file
 
@@ -50,6 +53,28 @@ def get_imarray(img):
     return np.asarray(rgbimg)[..., :3] / 255.
 
 
+def mask_colours(a, colours, tolerance=1e-9, leave=0):
+    """
+    Remove particular colours from the palette.
+    """
+    tree = BallTree(a)
+    target = tree.query_radius(colours, tolerance)
+    mask = np.ones(a.shape[0], dtype=bool)
+    end = None if leave < 2 else 1 - leave
+    for t in target:
+        mask[t[leave:end]] = False
+    return a[mask]
+
+
+def remove_duplicates(a, tolerance=1e-9):
+    """
+    Remove all duplicate points, within the given tolerance.
+    """
+    for c in a:
+        a = mask_colours(a, [c], leave=1)
+    return a
+
+
 def get_quanta(imarray, n_colours=256):
     """
     Reduces the colours in the image array down to some specified number,
@@ -76,8 +101,10 @@ def get_quanta(imarray, n_colours=256):
     quanta = kmeans.cluster_centers_
 
     # Regularization.
-    quanta[quanta > 1] = 1
-    quanta[quanta < 0] = 0
+    # quanta[quanta > 1] = 1
+    # quanta[quanta < 0] = 0
+    quanta = remove_duplicates(quanta)
+    quanta = mask_colours(quanta, [[1,1,1], [0,0,0]])
 
     return quanta
 
@@ -93,13 +120,13 @@ def get_distances(quanta, zero_point=None):
     Args:
         quanta (ndarray): The array from ``get_quanta()``.
         zero_point (ndarray): The point to use as the starting point, e.g.
-            [[0.25, 0, 0.5]], or [[0,0,0]], or even [[1,1,1]].
+            [[0, 0, 0.5]], [[0.25, 0, 0.5]], or [[0, 0, 0]], or even [[1, 1, 1]].
 
     Returns:
         ndarray. A matrix of size (n_colours+2, n_colours+2).
     """
     # Add cool-point.
-    zero_point = zero_point or [[0.0, 0.00, 0.50]]
+    zero_point = zero_point or [[0.0, 0.0, 0.5]]
     p = np.vstack([zero_point, quanta])
 
     # Make distance matrix.
@@ -144,7 +171,7 @@ def sort_quanta(distances):
 
     # Slice off the initial value and the last value to account for the added
     # colours. Then subtract one to shift indices back to proper range.
-    return result[1:-1]
+    return result[1:-1] - 1
 
 
 def get_codebook(imarray, n_colours=256, cool_point=None):
@@ -155,8 +182,7 @@ def get_codebook(imarray, n_colours=256, cool_point=None):
     Args:
         imarray (ndarray): The image array from ``get_imarray()``.
         n_colours (int): The number of colours to reduce to.
-        cool_point (ndarray): The point to use as the starting point, e.g.
-            [[0.25, 0, 0.5]], or [[0,0,0]], or even [[1,1,1]].
+        cool_point (ndarray): The point to use as the starting point.
 
     Returns:
         ndarray. A matrix of size (n_colours+2, n_colours+2).
@@ -198,7 +224,6 @@ def make_cmap(colours):
     # creating list of above lists and transposing
     RGB = zip(R, G, B)
     rgb = zip(*RGB)
-    #print rgb
 
     # creating dictionary
     k = ['red', 'green', 'blue'] # makes list of keys
@@ -260,4 +285,50 @@ def image_to_data(img, n_colours=128, interval=None):
     imarray = get_imarray(img)
     colours = get_codebook(imarray, n_colours=n_colours)
     recovered = recover_data(imarray, colours)
-    return scale_data(recovered, interval)
+    return scale_data(recovered, interval), colours
+
+
+def get_url(databytes, ext, uuid1):
+
+    file_link = ''
+    now = datetime.datetime.now()
+    expires = now + datetime.timedelta(minutes=240)
+    success = False
+
+    try:
+        from secrets import KEY, SECRET
+        session = boto3.session.Session(aws_access_key_id=KEY,
+                                        aws_secret_access_key=SECRET,
+                                        region_name='us-east-1'
+                                        )
+        client = session.client('s3')
+        key = uuid1 + '.' + ext
+        bucket = 'ageobot'
+        acl = 'public-read'  # For public file.
+        params = {'Body': databytes,
+                  'Expires': expires,
+                  'Bucket': bucket,
+                  'Key': key,
+                  'ACL': acl,
+                  }
+        r = client.put_object(**params)
+        success = r['ResponseMetadata']['HTTPStatusCode'] == 200
+    except:
+        print('Upload to S3 failed')
+
+    if success:
+        # Only do this if successfully uploaded, because
+        # you always get a link, even if no file.
+        if acl == 'public-read':
+            file_link = 'https://s3.amazonaws.com/{}/{}'.format(bucket, key)
+        else:
+            try:
+                params = {'Bucket': bucket,
+                          'Key': key}
+                file_link = client.generate_presigned_url('get_object',
+                                                          Params=params,
+                                                          ExpiresIn=3600)
+            except:
+                print('Retrieval of S3 link failed')
+
+    return file_link

@@ -8,6 +8,7 @@ from io import BytesIO
 import base64
 import urllib
 import requests
+import uuid
 
 from flask import Flask
 from flask import make_response
@@ -21,6 +22,7 @@ from sklearn.utils import shuffle
 
 from errors import InvalidUsage
 import utils
+import mycarta_imtools as mci
 
 #
 # Set up.
@@ -38,54 +40,111 @@ def handle_invalid_usage(error):
 #
 @application.route('/rainbow')
 def rainbow():
+    params = {}
     result = {}
-    
+    crop = []
+    find_data = False
+    success = True
+    m = 'Thanks for using keats!'
+
     # Params from inputs.
-    url = request.args.get('url')
-    ncolours = request.args.get('ncolours') or '128'
-    interval = request.args.get('interval') or '0,1'
-    region = request.args.get('region')
+    params['url'] = request.args.get('url')
+    params['n_colours'] = request.args.get('n_colours') or '128'
+    params['interval'] = request.args.get('interval') or '0,1'
+    params['region'] = request.args.get('region') or 'auto'
+    params['recover'] = request.args.get('recover') or ''
+    params['format'] = request.args.get('format') or 'PNG'
+    params['return_cmap'] = request.args.get('return_cmap') or ''
 
     # Condition parameters.
-    n_colours = int(ncolours)
-    interval = [int(n) for n in interval.split(',')]
-    if region:
-        region = [int(n) for n in region.split(',')]
+    params['n_colours'] = int(params['n_colours'])
+    params['recover'] = False if params['recover'].lower() in ['false', 'no', '0'] else True
+    params['return_cmap'] = True if params['return_cmap'].lower() in ['true', 'yes', '1'] else False
+    params['interval'] = [int(n) for n in params['interval'].split(',')]
+    if params['region'].lower() == 'auto':
+        find_data = True
+    elif params['region'] is not '':
+        crop = [int(n) for n in params['region'].split(',')]
     else:
-        region = []
+        pass
 
     # Fetch and crop image.
     try:
-        r = requests.get(url)
-        im = Image.open(BytesIO(r.content))
+        r = requests.get(params['url'])
+        img = Image.open(BytesIO(r.content))
     except Exception:
         result['status'] = 'failed'
         m = 'Error. Unable to open image from target URI. '
         result['message'] = m
-        result['parameters'] = utils.build_params(method, avg,
-                                                  t_min, t_max,
-                                                  region,
-                                                  trace_spacing,
-                                                  url=url)
         return jsonify(result)
 
-    if region:
+    if crop:
         try:
-            im = im.crop(region)
+            img = img.crop(region)
         except Exception:
-            m = 'Improper crop parameters '
-            raise InvalidUsage(m+region, status_code=410)
+            m = 'Improper crop parameters. '
+            raise InvalidUsage(m+crop, status_code=410)
 
-    if utils.is_greyscale(im):
+    if find_data:
+        img = mci.find_data(img)
+
+    if utils.is_greyscale(img):
+        success = False
         m = "The image appears to be greyscale already."
-        raise InvalidUsage(m, status_code=410)
 
     # Unweave the rainbow.
-    result = utils.image_to_data(im, n_colours=n_colours, interval=interval)
-    imgout = Image.fromarray(np.uint8(result*255))
+    if params['recover']:
+        data, cmap = utils.image_to_data(img,
+                                         n_colours=params['n_colours'],
+                                         interval=params['interval'])
+        imgout = Image.fromarray(np.uint8(data*255))
+    else:
+        data = np.asarray(img)[..., :3] / 255.
+        cmap = []
+        imgout = img
 
-    return utils.serve_pil_image(imgout)
+    databytes = BytesIO()
+    if params['format'].lower() in ['numpy', 'npy', 'np', 'array', 'ndarray', 'bin', 'binary']:
+        params['format'] = 'NumPy binary'
+        ext = 'npy'
+        np.save(databytes, data)
+    elif params['format'].lower() in ['text', 'txt', 'ascii', 'utf8']:
+        params['format'] = 'NumPy text'
+        ext = 'txt'
+        np.savetxt(databytes, data)
+    elif params['format'].lower() in ['png', 'jpg', 'jpeg', 'tiff']:
+        if params['format'] == 'jpg':
+            ext = 'jpg'
+            params['format'] = 'jpeg'
+        elif params['format'] == 'jpeg':
+            ext = 'jpg'
+        else:
+            ext = params['format'].lower()
+        imgout.save(databytes, params['format'])
+        params['format'] = params['format'].upper() + ' image'
+    else:
+        result['status'] = 'failed'
+        m = 'Error. Target format not recognized. '
+        result['message'] = m
+        return jsonify(result)
 
+    databytes.seek(0)
+    uuid1 = str(uuid.uuid1())
+    file_link = utils.get_url(databytes, ext, uuid1)
+
+    result['parameters'] = params
+    result['uuid'] = uuid1
+    result['image'] = file_link
+    result['cmap'] = cmap.tolist() if params['return_cmap'] else []
+    result['colours'] = cmap.shape[0]
+    result['message'] = m
+    if success:
+        result['status'] = 'success'
+    else:
+        result['status'] = 'failed'
+
+    #return utils.serve_pil_image(imgout)
+    return jsonify(result)
 
 @application.route('/')
 def main():
