@@ -38,6 +38,8 @@ def handle_invalid_usage(error):
 #
 @application.route('/rainbow')
 def rainbow():
+    result = {}
+    
     # Params from inputs.
     url = request.args.get('url')
     ncolours = request.args.get('ncolours') or '128'
@@ -57,7 +59,6 @@ def rainbow():
         r = requests.get(url)
         im = Image.open(BytesIO(r.content))
     except Exception:
-        result = {'job_uuid': uuid.uuid1()}
         result['status'] = 'failed'
         m = 'Error. Unable to open image from target URI. '
         result['message'] = m

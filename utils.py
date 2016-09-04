@@ -46,7 +46,8 @@ def get_imarray(img):
     Returns:
         ndarray.
     """
-    return np.asarray(img)[..., :3] / 255.
+    rgbimg = img.convert('RGB')
+    return np.asarray(rgbimg)[..., :3] / 255.
 
 
 def get_quanta(imarray, n_colours=256):
@@ -143,7 +144,7 @@ def sort_quanta(distances):
 
     # Slice off the initial value and the last value to account for the added
     # colours. Then subtract one to shift indices back to proper range.
-    return result[1:-1] - 1
+    return result[1:-1]
 
 
 def get_codebook(imarray, n_colours=256, cool_point=None):
