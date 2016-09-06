@@ -53,11 +53,14 @@ def get_imarray(img):
     return np.asarray(rgbimg)[..., :3] / 255.
 
 
-def mask_colours(a, colours, tolerance=1e-9, leave=0):
+def mask_colours(a, colours, tolerance=1e-6, leave=0):
     """
     Remove particular colours from the palette.
+
+    TODO
+        Only remove them if they aren't in the colourmap... i.e. if they are
+        out on their own.
     """
-    tree = BallTree(a)
     target = tree.query_radius(colours, tolerance)
     mask = np.ones(a.shape[0], dtype=bool)
     end = None if leave < 2 else 1 - leave
@@ -66,7 +69,34 @@ def mask_colours(a, colours, tolerance=1e-9, leave=0):
     return a[mask]
 
 
-def remove_duplicates(a, tolerance=1e-9):
+def remove_extremes(a, tree):
+    """
+    Remove specified points if they seem to be on
+    their own and not part of the colourmap.
+    """
+    colours = [[0, 0, 0], [1, 1, 1]]
+    lim = max(a.shape[0] // 15, 5)
+    distances, indices = tree.query(colours, lim)
+    for (dist, idx) in zip(distances, indices):
+        tol = np.diff(dist[1:]).mean()
+        if dist[0] < tol / 3:
+            # Then there's effectively a point
+            # at the target colour.
+            if dist[1] > 3 * tol:
+                # Point is prolly not in cbar
+                # so we eliminate it.
+                a = np.delete(a, idx[0])
+            else:
+                # Colour is part of colourbar
+                # so leave it alone.
+                pass
+        else:
+            # There's no point that colour.
+            pass
+    return a
+
+
+def remove_duplicates(a, tree, tolerance=1e-6):
     """
     Remove all duplicate points, within the given tolerance.
     """
@@ -101,10 +131,12 @@ def get_quanta(imarray, n_colours=256):
     quanta = kmeans.cluster_centers_
 
     # Regularization.
-    # quanta[quanta > 1] = 1
-    # quanta[quanta < 0] = 0
-    quanta = remove_duplicates(quanta)
-    quanta = mask_colours(quanta, [[1,1,1], [0,0,0]])
+    # For some reason this first bit seems to be necessary sometimes
+    quanta[quanta > 1] = 1
+    quanta[quanta < 0] = 0
+    tree = BallTree(quanta)
+    quanta = remove_duplicates(quanta, tree)
+    quanta = remove_extremes(quanta, tree)
 
     return quanta
 
@@ -126,7 +158,7 @@ def get_distances(quanta, zero_point=None):
         ndarray. A matrix of size (n_colours+2, n_colours+2).
     """
     # Add cool-point.
-    zero_point = zero_point or [[0.0, 0.0, 0.5]]
+    zero_point = zero_point or [[0.0, 0.0, 0.25]]
     p = np.vstack([zero_point, quanta])
 
     # Make distance matrix.
@@ -244,13 +276,15 @@ def recover_data(imarray, colours):
     Returns:
         ndarray. The recovered data, the same shape as the input imaray.
     """
-    # Imarray should be h x w x 3 array.
     kdtree = cKDTree(colours)
-    _, ix = kdtree.query(imarray)
+    dx, ix = kdtree.query(imarray)
 
     # Scale.
     out = ix.astype(np.float)
     out /= np.amax(out)
+
+    # Remove anything that maps too far.
+    out[dx > np.sqrt(3)/8] = np.nan
 
     return out
 
