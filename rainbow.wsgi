@@ -12,9 +12,5 @@
 #if p not in sys.path:
 #    sys.path.insert(0, p)
 
-
-import rainbow
-application = rainbow.app
-
-#from rainbow import app as application
+from rainbow import app as application
 
