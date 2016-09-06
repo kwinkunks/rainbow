@@ -1,16 +1,5 @@
-#import sys
+import os
 
-#sys.path.insert(0, '/home/ubuntu/anaconda/lib/python3.5/site-packages')
-#sys.path.insert(0, '/var/www/html/rainbow')
-
-#import sys
-#r = "/var/www/html/rainbow"
-#if r not in sys.path:
-#    sys.path.insert(0, r)
-#
-#p = '/home/ubuntu/anaconda/lib/python3.5/site-packages'
-#if p not in sys.path:
-#    sys.path.insert(0, p)
+os.environ['LKH'] = '/home/ubuntu/LKH/LKH'
 
 from rainbow import app as application
-
