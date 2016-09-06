@@ -12,7 +12,7 @@ from PIL import Image
 from scipy import ndimage as ndi
 from skimage import color
 from skimage.morphology import disk
-from skimage.morphology import opening
+from skimage.morphology import opening, closing
 from skimage.morphology import remove_small_objects
 
 
@@ -39,8 +39,9 @@ def find_data(img, min_int = 0.03, max_int = 0.97, disk_sz = 3):
 
     binary = np.logical_and(color.rgb2gray(img) > 0.03, color.rgb2gray(img) < 0.97)
 
-    # Apply very mild opening.
+    # Apply very mild opening and closing.
     binary = opening(binary, disk(disk_sz))
+    binary = closing(binary, disk(disk_sz))
 
     # Keep only largest white object.
     label_objects, nb_labels = ndi.label(binary)

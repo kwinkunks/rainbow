@@ -92,16 +92,23 @@ def rainbow():
         success = False
         m = "The image appears to be greyscale already."
 
-    # Unweave the rainbow.
-    if params['recover']:
-        data, cmap = utils.image_to_data(img,
-                                         n_colours=params['n_colours'],
-                                         interval=params['interval'])
-        imgout = Image.fromarray(np.uint8(data*255))
-    else:
-        data = np.asarray(img)[..., :3] / 255.
-        cmap = []
-        imgout = img
+    try:
+        # Unweave the rainbow.
+        if params['recover']:
+            data, cmap = utils.image_to_data(img,
+                                             n_colours=params['n_colours'],
+                                             interval=params['interval'])
+            imgout = Image.fromarray(np.uint8(data*255))
+        else:
+            data = np.asarray(img)[..., :3] / 255.
+            cmap = []
+            imgout = img
+    except Exception:
+        result['status'] = 'failed'
+        m = 'Error. There was a problem converting this image. '
+        result['message'] = m
+        return jsonify(result)
+
 
     databytes = BytesIO()
     if params['format'].lower() in ['numpy', 'npy', 'np', 'array', 'ndarray', 'bin', 'binary']:
@@ -134,15 +141,16 @@ def rainbow():
 
     result['parameters'] = params
     result['uuid'] = uuid1
-    result['image'] = file_link
-    result['cmap'] = cmap.tolist() if params['return_cmap'] else []
-    result['colours'] = cmap.shape[0]
     result['message'] = m
     if success:
         result['status'] = 'success'
     else:
         result['status'] = 'failed'
 
+    result['result'] = {}
+    result['result']['image'] = file_link
+    result['result']['cmap'] = cmap.tolist() if params['return_cmap'] else []
+    result['result']['colours'] = cmap.shape[0]
     #return utils.serve_pil_image(imgout)
     return jsonify(result)
 
