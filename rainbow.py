@@ -38,8 +38,8 @@ def handle_invalid_usage(error):
 #
 # Rainbow.
 #
-@application.route('/rainbow')
-def rainbow():
+@application.route('/api')
+def api():
     params = {}
     result = {}
     crop = []
@@ -64,7 +64,10 @@ def rainbow():
     if params['region'].lower() == 'auto':
         find_data = True
     elif params['region'] is not '':
-        crop = [int(n) for n in params['region'].split(',')]
+        try:
+            crop = [int(n) for n in params['region'].split(',')]
+        except:
+            crop = []
     else:
         pass
 

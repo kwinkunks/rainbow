@@ -41,7 +41,6 @@ def find_data(img, min_int = 0.03, max_int = 0.97, disk_sz = 3):
 
     # Apply very mild opening and closing.
     binary = opening(binary, disk(disk_sz))
-    binary = closing(binary, disk(disk_sz))
 
     # Keep only largest white object.
     label_objects, nb_labels = ndi.label(binary)
