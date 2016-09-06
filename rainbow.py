@@ -27,9 +27,9 @@ import mycarta_imtools as mci
 #
 # Set up.
 #
-application = Flask(__name__)
+app = Flask(__name__)
 
-@application.errorhandler(InvalidUsage)
+@app.errorhandler(InvalidUsage)
 def handle_invalid_usage(error):
     response = jsonify(error.to_dict())
     response.status_code = error.status_code
@@ -38,7 +38,7 @@ def handle_invalid_usage(error):
 #
 # Rainbow.
 #
-@application.route('/rainbow')
+@app.route('/rainbow')
 def rainbow():
     params = {}
     result = {}
@@ -146,10 +146,11 @@ def rainbow():
     #return utils.serve_pil_image(imgout)
     return jsonify(result)
 
-@application.route('/')
-def main():
+@app.route('/')
+def root_path():
     return render_template('index.html', title='Home')
 
 if __name__ == "__main__":
-    application.debug = True
-    application.run()
+    app.debug = True
+    app.run()
+
