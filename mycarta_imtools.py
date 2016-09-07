@@ -35,7 +35,8 @@ def find_data(img, min_int = 0.03, max_int = 0.97, disk_sz = 3):
         ndarray. (M, N, 3) array. An image with only the main map.    
     """
     # Cast as array, removing alpha channel if there is one.
-    img = np.asarray(img)[:,:,:3]
+    rgbimg = img.convert('RGB')
+    img = np.asarray(rgbimg)[:,:,:3]
 
     binary = np.logical_and(color.rgb2gray(img) > 0.03, color.rgb2gray(img) < 0.97)
 
