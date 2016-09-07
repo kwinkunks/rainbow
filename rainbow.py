@@ -51,7 +51,7 @@ def api():
     params['url'] = request.args.get('url')
     params['n_colours'] = request.args.get('n_colours') or '128'
     params['interval'] = request.args.get('interval') or '0,1'
-    params['region'] = request.args.get('region') or 'auto'
+    params['region'] = request.args.get('region') or 'all'
     params['recover'] = request.args.get('recover') or ''
     params['format'] = request.args.get('format') or 'PNG'
     params['return_cmap'] = request.args.get('return_cmap') or ''
@@ -97,22 +97,21 @@ def api():
         m = "The image appears to be greyscale already."
         recover = False
 
-    try:
-        # Unweave the rainbow.
-        if recover:
-            data, cmap = utils.image_to_data(img,
-                                             n_colours=params['n_colours'],
-                                             interval=params['interval'])
-            imgout = Image.fromarray(np.uint8(data*255))
-        else:
-            data = np.asarray(img)[..., :3] / 255.
-            cmap = np.array([])
-            imgout = img
-    except Exception:
-        result['status'] = 'failed'
-        m = 'Error. There was a problem converting this image. '
-        result['message'] = m
-        return jsonify(result)
+    # Unweave the rainbow.
+    if recover:
+        data, cmap = utils.image_to_data(img,
+                                         n_colours=params['n_colours'],
+                                         interval=params['interval'])
+        imgout = Image.fromarray(np.uint8(data*255))
+    else:
+        data = np.asarray(img)[..., :3] / 255.
+        cmap = np.array([])
+        imgout = img
+    # except Exception:
+    #     result['status'] = 'failed'
+    #     m = 'Error. There was a problem converting this image. '
+    #     result['message'] = m
+    #     return jsonify(result)
 
 
     databytes = BytesIO()

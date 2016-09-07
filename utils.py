@@ -53,7 +53,7 @@ def get_imarray(img):
     return np.asarray(rgbimg)[..., :3] / 255.
 
 
-def mask_colours(a, colours, tolerance=1e-6, leave=0):
+def mask_colours(a, tree, colours, tolerance=1e-6, leave=0):
     """
     Remove particular colours from the palette.
 
@@ -69,30 +69,39 @@ def mask_colours(a, colours, tolerance=1e-6, leave=0):
     return a[mask]
 
 
-def remove_extremes(a, tree):
-    """
-    Remove specified points if they seem to be on
-    their own and not part of the colourmap.
-    """
-    colours = [[0, 0, 0], [1, 1, 1]]
-    lim = max(a.shape[0] // 15, 5)
-    distances, indices = tree.query(colours, lim)
+def isolate_black(a, tree):
+    distances, indices = tree.query([[0,0,0]], 10)
     for (dist, idx) in zip(distances, indices):
-        tol = np.diff(dist[1:]).mean()
+        tol = np.diff(dist[1:]) .mean()
         if dist[0] < tol / 3:
             # Then there's effectively a point
             # at the target colour.
             if dist[1] > 3 * tol:
                 # Point is prolly not in cbar
-                # so we eliminate it.
+                # so we eliminate.
                 a = np.delete(a, idx[0])
             else:
-                # Colour is part of colourbar
-                # so leave it alone.
-                pass
+                # Colour is part of colourbar.
+                # If it's right at black, eliminate it.
+                if dist[0] < tol / 30:
+                    a = np.delete(a, idx[0])
         else:
-            # There's no point that colour.
+            # There's no point that colour. Add one.
             pass
+    return a
+
+
+def isolate_white(a, tree):
+    distances, indices = tree.query([[1,1,1]], 10)
+    for (dist, idx) in zip(distances, indices):
+        tol = np.diff(dist[1:]) .mean()
+        if dist[0] < tol / 3:
+            # Then there's effectively a point
+            # at the target colour.
+            if dist[1] > 3 * tol:
+                # Point is prolly not in cbar
+                # so we eliminate.
+                a = np.delete(a, idx[0])
     return a
 
 
@@ -101,7 +110,7 @@ def remove_duplicates(a, tree, tolerance=1e-6):
     Remove all duplicate points, within the given tolerance.
     """
     for c in a:
-        a = mask_colours(a, [c], leave=1)
+        a = mask_colours(a, tree, [c], leave=1)
     return a
 
 
@@ -136,7 +145,8 @@ def get_quanta(imarray, n_colours=256):
     quanta[quanta < 0] = 0
     tree = BallTree(quanta)
     quanta = remove_duplicates(quanta, tree)
-    quanta = remove_extremes(quanta, tree)
+    quanta = isolate_black(quanta, tree)
+    quanta = isolate_white(quanta, tree)
 
     return quanta
 
