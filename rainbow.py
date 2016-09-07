@@ -106,7 +106,7 @@ def api():
             imgout = Image.fromarray(np.uint8(data*255))
         else:
             data = np.asarray(img)[..., :3] / 255.
-            cmap = []
+            cmap = np.array([])
             imgout = img
     except Exception:
         result['status'] = 'failed'
