@@ -168,7 +168,7 @@ def get_distances(quanta, zero_point=None):
         ndarray. A matrix of size (n_colours+2, n_colours+2).
     """
     # Add cool-point.
-    zero_point = zero_point or [[0.0, 0.0, 0.25]]
+    zero_point = zero_point or [[0.0, 0.0, 0.0]]
     p = np.vstack([zero_point, quanta])
 
     # Make distance matrix.
