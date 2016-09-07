@@ -91,13 +91,15 @@ def api():
     if find_data:
         img = mci.find_data(img)
 
+    recover = params['recover']
     if utils.is_greyscale(img):
         success = False
         m = "The image appears to be greyscale already."
+        recover = False
 
     try:
         # Unweave the rainbow.
-        if params['recover']:
+        if recover:
             data, cmap = utils.image_to_data(img,
                                              n_colours=params['n_colours'],
                                              interval=params['interval'])
