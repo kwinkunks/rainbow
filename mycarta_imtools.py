@@ -15,6 +15,7 @@ from skimage import color, exposure
 from skimage.morphology import disk
 from skimage.morphology import opening
 from skimage.morphology import remove_small_objects
+from skimage.morphology import convex_hull_image
 
 def find_data(img, min_int=0.03, max_int=0.97, disk_sz=2, hull=True):
     """
