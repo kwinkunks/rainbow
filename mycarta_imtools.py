@@ -16,22 +16,23 @@ from skimage.morphology import disk
 from skimage.morphology import opening, closing
 from skimage.morphology import remove_small_objects
 
-def find_map(url, min_int = 0.03, max_int = 0.97, disk_sz = 2, opt = None):
+def find_data(img, min_int = 0.03, max_int = 0.97, disk_sz = 2, opt = None):
     """Find the map in an image (using morphological operations) and return it.
     Heuristic assumption the map is the largest object in the map.
-    Parameters
-    ----------
-    img: (M, N, 3) or (M, N, 4) 
+    
+    Args:
+    	img: (M, N, 3) or (M, N, 4) 
         An RGB or RGBA image.
-    min_int : threshold value to eliminate ~black background.
+    	min_int : threshold value to eliminate ~black background.
         If min_int is not given, a default value of 0.03 is uded.
-    max_int : threshold value to eliminate ~white background.
+    	max_int : threshold value to eliminate ~white background.
         If max_int is not given, a default value of 0.97 is uded. 
-    disk_sz : size of disk-shaped structuring element for opening.
+    	disk_sz : size of disk-shaped structuring element for opening.
         If disk_sz is not given, a default value of 2 is uded.
-    opt			:	optional flag. Default is None; if set to not None, 
+    	opt			:	optional flag. Default is None; if set to not None, 
     		the convex hull of the largest detected object is returned.
-    Returns
+    
+    Returns:  
         ndarray. (M, N, 3) array. An image with only the main map.    
     """
     # Cast as array, removing alpha channel if there is one.
