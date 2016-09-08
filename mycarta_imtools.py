@@ -11,7 +11,7 @@ import requests
 import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
-from skimage import color
+from skimage import color, exposure
 from skimage.morphology import disk
 from skimage.morphology import opening, closing
 from skimage.morphology import remove_small_objects
@@ -38,9 +38,14 @@ def find_map(url, min_int = 0.03, max_int = 0.97, disk_sz = 2, opt = None):
     rgbimg = img.convert('RGB')
     img = np.asarray(rgbimg)[:,:,:3]
 
-    binary = np.logical_and(color.rgb2gray(img) > min_int, color.rgb2gray(img) < max_int)
+    # Stretch contrast.
+    p2, p98 = np.percentile(img, (2, 98))
+    rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
+    
+    # Convert to binary.
+    binary = np.logical_and(color.rgb2gray(rescale) > min_int, color.rgb2gray(rescale) < max_int)
 
-    # Apply very mild opening and closing.
+    # Apply very mild opening.
     binary = opening(binary, disk(disk_sz))
 
     # Keep only largest white object.
