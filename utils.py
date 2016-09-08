@@ -72,19 +72,19 @@ def mask_colours(a, tree, colours, tolerance=1e-6, leave=0):
 def isolate_black(a, tree):
     distances, indices = tree.query([[0,0,0]], 10)
     for (dist, idx) in zip(distances, indices):
-        tol = np.diff(dist[1:]) .mean()
+        tol = np.diff(dist[1:]).mean()
         if dist[0] < tol / 3:
             # Then there's effectively a point
             # at the target colour.
             if dist[1] > 3 * tol:
                 # Point is prolly not in cbar
                 # so we eliminate.
-                a = np.delete(a, idx[0])
+                a = np.delete(a, idx[0], axis=0)
             else:
                 # Colour is part of colourbar.
                 # If it's right at black, eliminate it.
                 if dist[0] < tol / 30:
-                    a = np.delete(a, idx[0])
+                    a = np.delete(a, idx[0], axis=0)
         else:
             # There's no point that colour. Add one.
             pass

@@ -51,14 +51,16 @@ def api():
     params['url'] = request.args.get('url')
     params['n_colours'] = request.args.get('n_colours') or '128'
     params['interval'] = request.args.get('interval') or '0,1'
-    params['region'] = request.args.get('region') or 'all'
+    params['region'] = request.args.get('region') or 'auto'
     params['recover'] = request.args.get('recover') or ''
     params['format'] = request.args.get('format') or 'PNG'
     params['return_cmap'] = request.args.get('return_cmap') or ''
+    params['hull'] = request.args.get('hull') or ''
 
     # Condition parameters.
     params['n_colours'] = int(params['n_colours'])
     params['recover'] = False if params['recover'].lower() in ['false', 'no', '0'] else True
+    params['hull'] = False if params['hull'].lower() in ['false', 'no', '0'] else True
     params['return_cmap'] = True if params['return_cmap'].lower() in ['true', 'yes', '1'] else False
     params['interval'] = [int(n) for n in params['interval'].split(',')]
     if params['region'].lower() == 'auto':
@@ -83,13 +85,13 @@ def api():
 
     if crop:
         try:
-            img = img.crop(region)
+            img = img.crop(crop)
         except Exception:
             m = 'Improper crop parameters. '
-            raise InvalidUsage(m+crop, status_code=410)
+            raise InvalidUsage(m+params['region'], status_code=410)
 
     if find_data:
-        img = mci.find_data(img)
+        img = mci.find_data(img, hull=params['hull'])
 
     recover = params['recover']
     if utils.is_greyscale(img):
