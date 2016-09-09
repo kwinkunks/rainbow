@@ -70,7 +70,8 @@ def mask_colours(a, tree, colours, tolerance=1e-6, leave=0):
 
 
 def isolate_black(a, tree):
-    distances, indices = tree.query([[0,0,0]], 10)
+    count = min([6, a.shape[0]//15])
+    distances, indices = tree.query([[0,0,0]], count)
     for (dist, idx) in zip(distances, indices):
         tol = np.diff(dist[1:]).mean()
         if dist[0] < tol / 3:
@@ -92,16 +93,17 @@ def isolate_black(a, tree):
 
 
 def isolate_white(a, tree):
-    distances, indices = tree.query([[1,1,1]], 10)
+    count = min([6, a.shape[0]//15])
+    distances, indices = tree.query([[1,1,1]], count)
     for (dist, idx) in zip(distances, indices):
-        tol = np.diff(dist[1:]) .mean()
+        tol = np.diff(dist[1:]).mean()
         if dist[0] < tol / 3:
             # Then there's effectively a point
             # at the target colour.
             if dist[1] > 3 * tol:
                 # Point is prolly not in cbar
                 # so we eliminate.
-                a = np.delete(a, idx[0])
+                a = np.delete(a, idx[0], axis=0)
     return a
 
 
@@ -114,7 +116,20 @@ def remove_duplicates(a, tree, tolerance=1e-6):
     return a
 
 
-def get_quanta(imarray, n_colours=256):
+def remove_isolates(a, tree, min_neighbours):
+    """
+    Remove all points with fewer than 2r neighbours in a radius of r,
+    where r is the median of all nearest neighbour distances.
+    """
+    radius = (min_neighbours + 1) / 2
+    d, _ = tree.query(a, 2)
+    tol = np.median(d[:,1]) * radius
+    i = tree.query_radius(a, tol)
+    indices_of_isolates = [j for j, k in enumerate(i) if k.size < 2*radius]
+    return np.delete(newp, indices_of_isolates, axis=0)
+
+
+def get_quanta(imarray, n_colours=256, min_neighbours=6):
     """
     Reduces the colours in the image array down to some specified number,
     default 256. Usually you'll want at least 100, at most 500. Returns
@@ -143,10 +158,12 @@ def get_quanta(imarray, n_colours=256):
     # For some reason this first bit seems to be necessary sometimes
     quanta[quanta > 1] = 1
     quanta[quanta < 0] = 0
+
     tree = BallTree(quanta)
     quanta = remove_duplicates(quanta, tree)
-    quanta = isolate_black(quanta, tree)
-    quanta = isolate_white(quanta, tree)
+
+    tree = BallTree(quanta)
+    quanta = remove_isolates(quanta, tree, min_neighbours)
 
     return quanta
 
@@ -216,7 +233,7 @@ def sort_quanta(distances):
     return result[1:-1] - 1
 
 
-def get_codebook(imarray, n_colours=256, cool_point=None):
+def get_codebook(imarray, n_colours=256, cool_point=None, min_neighbours=6):
     """
     Finds and then sorts the colour table (aka codebook or palette). Wraps
     get_quanta, get_distances, and sort_quanta.
@@ -229,7 +246,7 @@ def get_codebook(imarray, n_colours=256, cool_point=None):
     Returns:
         ndarray. A matrix of size (n_colours+2, n_colours+2).
     """
-    q = get_quanta(imarray, n_colours)
+    q = get_quanta(imarray, n_colours, min_neighbours)
     s = sort_quanta(get_distances(q, cool_point))
     return q[s]
 
@@ -333,7 +350,9 @@ def image_to_data(img, n_colours=128, interval=None):
 
 
 def get_url(databytes, ext, uuid1):
-
+    """
+    Upload to AWS S3 storage and collect URL.
+    """
     file_link = ''
     now = datetime.datetime.now()
     expires = now + datetime.timedelta(minutes=240)
@@ -347,7 +366,7 @@ def get_url(databytes, ext, uuid1):
                                         )
         client = session.client('s3')
         key = uuid1 + '.' + ext
-        bucket = 'ageobot'
+        bucket = 'keats'
         acl = 'public-read'  # For public file.
         params = {'Body': databytes,
                   'Expires': expires,
