@@ -126,7 +126,7 @@ def remove_isolates(a, tree, min_neighbours):
     tol = np.median(d[:,1]) * radius
     i = tree.query_radius(a, tol)
     indices_of_isolates = [j for j, k in enumerate(i) if k.size < 2*radius]
-    return np.delete(newp, indices_of_isolates, axis=0)
+    return np.delete(a, indices_of_isolates, axis=0)
 
 
 def get_quanta(imarray, n_colours=256, min_neighbours=6):
