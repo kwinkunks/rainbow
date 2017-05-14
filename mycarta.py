@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 from scipy import ndimage as ndi
 from skimage import color, exposure, feature
-from skimage.filters import threshold_otsu, threshold_sauvola
+from skimage.filters import threshold_otsu   #, threshold_sauvola
 from skimage.morphology import remove_small_objects, disk, square, opening, dilation
 from skimage.measure import find_contours, approximate_polygon
 from skimage import segmentation
@@ -59,8 +59,8 @@ def find_largest(img, threshold='opening'):
     elif threshold == 'adaptive':
         gry = sp.ndimage.filters.gaussian_filter(color.rgb2gray(gry),7)
         rescale = exposure.rescale_intensity(gry, in_range=(p2, p95))
-        thresh_sauvola = threshold_sauvola(rescale, window_size=99)
-        binary = rescale < thresh_sauvola
+        #thresh_sauvola = threshold_sauvola(rescale, window_size=99)
+        #binary = rescale < thresh_sauvola
 
     elif threshold == 'global':
         rescale = exposure.rescale_intensity(gry, in_range=(p2, p95))
