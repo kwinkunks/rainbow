@@ -27,11 +27,19 @@
 </li>
 <li><code>recover</code> — whether to recover the data or not.</li>
 <li><code>n_colours</code> — how many colours to cluster (default <code>128</code>)</li>
+<li><code>sampling</code> — how to subsample the image for colour determination:
+ <ul>
+ <li><code>random</code> — random pixels (default).</li>
+ <li><code>columns</code>  —  random columns (best for seismic).</li>
+ <li><code>random</code>  — random rows.</li>
+</ul>
+<li><code>cool_point</code> — default <code>[0, 0, 0]</code>.</li>
 <li><code>return_cmap</code> — whether to get the discovered colourmap back.</li>
-<li><code>format</code> — number of traces to extract to get statistics from (default 10)</li>
+<li><code>format</code> — what kind of data to return:</li>
  <ul>
  <li><code>png</code> — a greyscale PNG image.</li>
  <li><code>npy</code> — a binary NumPy array.</li>
+ <li><code>segy</code> — a SEG-Y file.</li>
  <li><code>txt</code> — a text NumPy array.</li>
  </ul>
 </ul>

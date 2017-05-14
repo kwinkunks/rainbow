@@ -5,29 +5,32 @@ Simple application to get data from images.
 by Matt Hall, Agile Geoscience, 2016
 """
 from io import BytesIO
-import base64
-import urllib
 import requests
 import uuid
+import os
 
 from flask import Flask
-from flask import make_response
 from flask import request, jsonify, render_template
-from flask import send_file
+from flask import redirect, url_for
+from werkzeug.utils import secure_filename
 
 import numpy as np
 from PIL import Image
-from sklearn.cluster import KMeans
-from sklearn.utils import shuffle
 
 from errors import InvalidUsage
 import utils
-import mycarta_imtools as mci
+import mycarta
 
-#
-# Set up.
-#
+
 application = Flask(__name__)
+
+UPLOAD_FOLDER = '/tmp/rainbow'
+DOWNLOAD_FOLDER = '/tmp/rainbow'
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+
+application.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+application.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
+
 
 @application.errorhandler(InvalidUsage)
 def handle_invalid_usage(error):
@@ -35,34 +38,32 @@ def handle_invalid_usage(error):
     response.status_code = error.status_code
     return response
 
-#
-# Rainbow.
-#
+
 @application.route('/api')
 def api():
-    params = {}
     result = {}
     crop = []
     find_data = False
     success = True
     m = 'Thanks for using keats!'
 
-    # Params from inputs.
-    params['url'] = request.args.get('url')
-    params['n_colours'] = request.args.get('n_colours') or '128'
-    params['interval'] = request.args.get('interval') or '0,1'
-    params['region'] = request.args.get('region') or 'auto'
-    params['recover'] = request.args.get('recover') or ''
-    params['format'] = request.args.get('format') or 'PNG'
-    params['return_cmap'] = request.args.get('return_cmap') or ''
-    params['hull'] = request.args.get('hull') or ''
+    params = utils.get_params(request)
 
-    # Condition parameters.
-    params['n_colours'] = int(params['n_colours'])
-    params['recover'] = False if params['recover'].lower() in ['false', 'no', '0'] else True
-    params['hull'] = False if params['hull'].lower() in ['false', 'no', '0'] else True
-    params['return_cmap'] = True if params['return_cmap'].lower() in ['true', 'yes', '1'] else False
-    params['interval'] = [int(n) for n in params['interval'].split(',')]
+    # Fetch and crop image.
+    # try:
+    if params['prod']:
+        r = requests.get(params['url'])
+        f = BytesIO(r.content)
+    else:
+        f = os.path.join(application.config['UPLOAD_FOLDER'], params['url'])
+        print("f is ", f)
+    img = Image.open(f)
+    # except Exception:
+    #     result['status'] = 'failed'
+    #     m = 'Error. Unable to open image from target URI. '
+    #     result['message'] = m
+    #     return jsonify(result)
+
     if params['region'].lower() == 'auto':
         find_data = True
     elif params['region'] is not '':
@@ -73,16 +74,6 @@ def api():
     else:
         pass
 
-    # Fetch and crop image.
-    try:
-        r = requests.get(params['url'])
-        img = Image.open(BytesIO(r.content))
-    except Exception:
-        result['status'] = 'failed'
-        m = 'Error. Unable to open image from target URI. '
-        result['message'] = m
-        return jsonify(result)
-
     if crop:
         try:
             img = img.crop(crop)
@@ -90,32 +81,35 @@ def api():
             m = 'Improper crop parameters. '
             raise InvalidUsage(m+params['region'], status_code=410)
 
-    if find_data:
-        img = mci.find_data(img, hull=params['hull'])
-
     recover = params['recover']
     if utils.is_greyscale(img):
         success = False
         m = "The image appears to be greyscale already."
         recover = False
 
+    if find_data:
+        img = mycarta.find_data(img)
+
     # Unweave the rainbow.
     if recover:
         data, cmap = utils.image_to_data(img,
                                          n_colours=params['n_colours'],
-                                         interval=params['interval'])
-        imgout = Image.fromarray(np.uint8(data*255))
+                                         sampling=params['sampling'],
+                                         cool_point=params['cool_point'],
+                                         interval=params['interval'],
+                                         )
     else:
-        data = np.asarray(img)[..., :3] / 255.
+        # Should really take the greyscale of the image.
+        # Need to reverse it so black is 'high'.
+        data = 1 - np.asarray(img)[..., 0] / 255.
         cmap = np.array([])
-        imgout = img
     # except Exception:
     #     result['status'] = 'failed'
     #     m = 'Error. There was a problem converting this image. '
     #     result['message'] = m
     #     return jsonify(result)
 
-
+    # Create the output
     databytes = BytesIO()
     if params['format'].lower() in ['numpy', 'npy', 'np', 'array', 'ndarray', 'bin', 'binary']:
         params['format'] = 'NumPy binary'
@@ -125,6 +119,10 @@ def api():
         params['format'] = 'NumPy text'
         ext = 'txt'
         np.savetxt(databytes, data)
+    elif params['format'].lower() in ['segy', 'sgy', 'seg-y', 'seg']:
+        params['format'] = 'SEG-Y'
+        ext = 'sgy'
+        databytes = utils.write_segy(databytes, data)
     elif params['format'].lower() in ['png', 'jpg', 'jpeg', 'tiff']:
         if params['format'] == 'jpg':
             ext = 'jpg'
@@ -133,18 +131,28 @@ def api():
             ext = 'jpg'
         else:
             ext = params['format'].lower()
+        imgout = Image.fromarray(np.uint8(data*255))
         imgout.save(databytes, params['format'])
         params['format'] = params['format'].upper() + ' image'
     else:
         result['status'] = 'failed'
-        m = 'Error. Target format not recognized. '
+        m = 'Error. Target format not recognized.'
         result['message'] = m
         return jsonify(result)
 
     databytes.seek(0)
     uuid1 = str(uuid.uuid1())
-    file_link = utils.get_url(databytes, ext, uuid1)
 
+    if params['prod']:
+        file_link = utils.get_url(databytes, ext, uuid1)
+    else:  # dev
+        fname = "{}.{}".format(uuid1, ext)
+        file_link = os.path.join(application.config['DOWNLOAD_FOLDER'], fname)
+        #file_link = "/home/matt/Downloads/{}.{}".format(uuid1, ext)
+        with open(file_link, 'wb') as f:
+            f.write(databytes.read())  # This seems weird.
+
+    # Set up the JSON result.
     result['parameters'] = params
     result['uuid'] = uuid1
     result['message'] = m
@@ -160,13 +168,51 @@ def api():
         result['result']['cmap'] = cmap.tolist() if params['return_cmap'] else []
         result['result']['colours'] = cmap.shape[0]
 
-    #return utils.serve_pil_image(imgout)
+    # return utils.serve_pil_image(imgout)
     return jsonify(result)
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@application.route('/upload', methods=['GET', 'POST'])
+def upload_file():
+    if request.method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            # flash('No file part')
+            return redirect(request.url)
+        file = request.files['file']
+        # if user does not select file, browser also
+        # submit a empty part without filename
+        if file.filename == '':
+            # flash('No selected file')
+            return redirect(request.url)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(application.config['UPLOAD_FOLDER'], filename))
+            return redirect(url_for('api',
+                                    url=filename, prod=False))
+
+    return '''
+    <!doctype html>
+    <title>Upload new File</title>
+    <h1>Upload new File</h1>
+    <form method=post enctype=multipart/form-data>
+      <p><input type=file name=file>
+         <input type=submit value=Upload>
+    </form>
+    '''
+
 
 @application.route('/')
 def main():
     return render_template('index.html', title='Home')
 
+
 if __name__ == "__main__":
     application.debug = True
+
     application.run()
